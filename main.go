@@ -50,11 +50,11 @@ func debug(endpoint func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	}
 }
 
-func health(w http.ResponseWriter, req *http.Request) {
+func health(w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintf(w, "ok\n")
 }
 
-func hello(w http.ResponseWriter, req *http.Request) {
+func hello(w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintf(w, "hello\n")
 }
 
