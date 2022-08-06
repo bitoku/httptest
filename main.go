@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 )
 
 type debugFormat struct {
@@ -21,29 +23,29 @@ type debugFormat struct {
 	Tls        any
 }
 
-func reqDebug(r *http.Request) debugFormat {
+func reqDebug(req *http.Request) debugFormat {
 	debugLog := debugFormat{}
-	debugLog.Method = r.Method
-	debugLog.Url = r.URL
-	debugLog.Header = r.Header
-	debugLog.Host = r.Host
-	debugLog.Form = r.Form
-	debugLog.PostForm = r.PostForm
-	debugLog.Trailer = r.Trailer
-	debugLog.RemoteAddr = r.RemoteAddr
-	debugLog.RequestUri = r.RequestURI
-	debugLog.Tls = r.TLS
+	debugLog.Method = req.Method
+	debugLog.Url = req.URL
+	debugLog.Header = req.Header
+	debugLog.Host = req.Host
+	debugLog.Form = req.Form
+	debugLog.PostForm = req.PostForm
+	debugLog.Trailer = req.Trailer
+	debugLog.RemoteAddr = req.RemoteAddr
+	debugLog.RequestUri = req.RequestURI
+	debugLog.Tls = req.TLS
 	return debugLog
 }
 
 func debug(endpoint func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		marshal, err := json.Marshal(reqDebug(r))
+	return func(w http.ResponseWriter, req *http.Request) {
+		marshal, err := json.Marshal(reqDebug(req))
 		if err != nil {
 			log.Fatalf("json format error: %s", err)
 		}
 		fmt.Println(string(marshal))
-		endpoint(w, r)
+		endpoint(w, req)
 	}
 }
 
@@ -63,10 +65,35 @@ func headers(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func delay(w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query().Get("duration")
+	duration, err := time.ParseDuration(query)
+
+	if err != nil {
+		duration = 5 * time.Second
+		if query == "" {
+			_, _ = fmt.Fprintf(w, "duration is not found.\n")
+		} else {
+			_, _ = fmt.Fprintf(w, "invalid format: %s\n", query)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(duration)
+	}()
+	wg.Wait()
+
+	_, _ = fmt.Fprintf(w, "waited for %s\n", duration.String())
+}
+
 func main() {
 	http.HandleFunc("/", health)
 	http.HandleFunc("/hello", debug(hello))
 	http.HandleFunc("/headers", debug(headers))
+	http.HandleFunc("/delay", debug(delay))
 
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {
