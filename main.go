@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -89,11 +90,26 @@ func delay(w http.ResponseWriter, req *http.Request) {
 	_, _ = fmt.Fprintf(w, "waited for %s\n", duration.String())
 }
 
+func httpError(w http.ResponseWriter, req *http.Request) {
+	codeQuery := req.URL.Query().Get("code")
+	code, err := strconv.Atoi(codeQuery)
+	if err != nil {
+		_, _ = fmt.Fprintf(w, "invalid code: %s\n", codeQuery)
+		code = 400
+	}
+	message := req.URL.Query().Get("message")
+	if message == "" {
+		message = "error"
+	}
+	http.Error(w, message, code)
+}
+
 func main() {
 	http.HandleFunc("/", health)
 	http.HandleFunc("/hello", debug(hello))
 	http.HandleFunc("/headers", debug(headers))
 	http.HandleFunc("/delay", debug(delay))
+	http.HandleFunc("/error", debug(httpError))
 
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {
