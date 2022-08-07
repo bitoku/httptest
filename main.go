@@ -45,6 +45,40 @@ func reqDebug(req *http.Request) debugFormat {
 	return debugLog
 }
 
+func enableKeepAlive() bool {
+	enableKeepAliveEnv := os.Getenv("ENABLE_KEEP_ALIVE")
+	if enableKeepAliveEnv != "" {
+		enableKeepAlive, err := strconv.ParseBool(enableKeepAliveEnv)
+		if err != nil {
+			_ = fmt.Errorf("invalid ENABLE_KEEP_ALIVE: %s\n", enableKeepAliveEnv)
+			enableKeepAlive = true
+		}
+		return enableKeepAlive
+	}
+	return true
+}
+
+func idleTimeout() time.Duration {
+	idleTimeoutEnv := os.Getenv("IDLE_TIMEOUT")
+	if idleTimeoutEnv != "" {
+		duration, err := time.ParseDuration(idleTimeoutEnv)
+		if err != nil {
+			_ = fmt.Errorf("invalid IDLE_TIMEOUT: %s\n", idleTimeoutEnv)
+			duration = 0
+		}
+		return duration
+	}
+	return 0
+}
+
+func addr() string {
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "80"
+	}
+	return ":" + httpPort
+}
+
 func debug(endpoint func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		marshal, err := json.Marshal(reqDebug(req))
@@ -118,38 +152,14 @@ func info(conf *settings) http.HandlerFunc {
 	}
 }
 
-func enableKeepAlive() bool {
-	enableKeepAliveEnv := os.Getenv("ENABLE_KEEP_ALIVE")
-	if enableKeepAliveEnv != "" {
-		enableKeepAlive, err := strconv.ParseBool(enableKeepAliveEnv)
+func closeCon(server *http.Server) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		err := server.Close()
 		if err != nil {
-			_ = fmt.Errorf("invalid ENABLE_KEEP_ALIVE: %s\n", enableKeepAliveEnv)
-			enableKeepAlive = true
+			// TODO
+			return
 		}
-		return enableKeepAlive
 	}
-	return true
-}
-
-func idleTimeout() time.Duration {
-	idleTimeoutEnv := os.Getenv("IDLE_TIMEOUT")
-	if idleTimeoutEnv != "" {
-		duration, err := time.ParseDuration(idleTimeoutEnv)
-		if err != nil {
-			_ = fmt.Errorf("invalid IDLE_TIMEOUT: %s\n", idleTimeoutEnv)
-			duration = 0
-		}
-		return duration
-	}
-	return 0
-}
-
-func addr() string {
-	httpPort := os.Getenv("HTTP_PORT")
-	if httpPort == "" {
-		httpPort = "80"
-	}
-	return ":" + httpPort
 }
 
 func main() {
@@ -172,6 +182,7 @@ func main() {
 	http.HandleFunc("/headers", debug(headers))
 	http.HandleFunc("/delay", debug(delay))
 	http.HandleFunc("/error", debug(httpError))
+	http.HandleFunc("/close", debug(closeCon(server)))
 
 	fmt.Println("Start Server")
 
