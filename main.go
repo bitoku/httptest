@@ -24,6 +24,12 @@ type debugFormat struct {
 	Tls        any
 }
 
+type settings struct {
+	addr            string
+	idleTimeout     time.Duration
+	enableKeepAlive bool
+}
+
 func reqDebug(req *http.Request) debugFormat {
 	debugLog := debugFormat{}
 	debugLog.Method = req.Method
@@ -104,38 +110,70 @@ func httpError(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, message, code)
 }
 
-func main() {
+func info(conf *settings) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		_, _ = fmt.Fprintf(w, "addr: %v\n", conf.addr)
+		_, _ = fmt.Fprintf(w, "enable keep alive: %v\n", conf.enableKeepAlive)
+		_, _ = fmt.Fprintf(w, "idle timeout: %v\n", conf.idleTimeout)
+	}
+}
+
+func enableKeepAlive() bool {
+	enableKeepAliveEnv := os.Getenv("ENABLE_KEEP_ALIVE")
+	if enableKeepAliveEnv != "" {
+		enableKeepAlive, err := strconv.ParseBool(enableKeepAliveEnv)
+		if err != nil {
+			_ = fmt.Errorf("invalid ENABLE_KEEP_ALIVE: %s\n", enableKeepAliveEnv)
+			enableKeepAlive = true
+		}
+		return enableKeepAlive
+	}
+	return true
+}
+
+func idleTimeout() time.Duration {
+	idleTimeoutEnv := os.Getenv("IDLE_TIMEOUT")
+	if idleTimeoutEnv != "" {
+		duration, err := time.ParseDuration(idleTimeoutEnv)
+		if err != nil {
+			_ = fmt.Errorf("invalid IDLE_TIMEOUT: %s\n", idleTimeoutEnv)
+			duration = 0
+		}
+		return duration
+	}
+	return 0
+}
+
+func addr() string {
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {
 		httpPort = "80"
 	}
+	return ":" + httpPort
+}
 
-	s := &http.Server{
-		Addr: ":" + httpPort,
+func main() {
+	conf := &settings{
+		addr:            addr(),
+		idleTimeout:     idleTimeout(),
+		enableKeepAlive: enableKeepAlive(),
 	}
 
-	disableKeepAlive := os.Getenv("ENABLE_KEEP_ALIVE")
-	if disableKeepAlive == "false" {
-		s.SetKeepAlivesEnabled(false)
+	server := &http.Server{
+		Addr:        conf.addr,
+		IdleTimeout: conf.idleTimeout,
 	}
 
-	idleTimeout := os.Getenv("IDLE_TIMEOUT")
-	if idleTimeout != "" {
-		duration, err := time.ParseDuration(idleTimeout)
-		if err != nil {
-			_ = fmt.Errorf("invalid IDLE_TIMEOUT: %s\n", idleTimeout)
-			duration = 0
-		}
-		s.IdleTimeout = duration
-	}
+	server.SetKeepAlivesEnabled(conf.enableKeepAlive)
 
 	http.HandleFunc("/", health)
+	http.HandleFunc("/info", info(conf))
 	http.HandleFunc("/hello", debug(hello))
 	http.HandleFunc("/headers", debug(headers))
 	http.HandleFunc("/delay", debug(delay))
 	http.HandleFunc("/error", debug(httpError))
 
-	fmt.Printf("Listen :%s\n", httpPort)
+	fmt.Println("Start Server")
 
-	log.Fatal(s.ListenAndServe())
+	log.Fatal(server.ListenAndServe())
 }
