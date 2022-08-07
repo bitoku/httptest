@@ -43,7 +43,7 @@ func debug(endpoint func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		marshal, err := json.Marshal(reqDebug(req))
 		if err != nil {
-			log.Fatalf("json format error: %s", err)
+			_ = fmt.Errorf("json format error: %s", err)
 		}
 		fmt.Println(string(marshal))
 		endpoint(w, req)
@@ -105,17 +105,37 @@ func httpError(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "80"
+	}
+
+	s := &http.Server{
+		Addr: ":" + httpPort,
+	}
+
+	disableKeepAlive := os.Getenv("ENABLE_KEEP_ALIVE")
+	if disableKeepAlive == "false" {
+		s.SetKeepAlivesEnabled(false)
+	}
+
+	idleTimeout := os.Getenv("IDLE_TIMEOUT")
+	if idleTimeout != "" {
+		duration, err := time.ParseDuration(idleTimeout)
+		if err != nil {
+			_ = fmt.Errorf("invalid IDLE_TIMEOUT: %s\n", idleTimeout)
+			duration = 0
+		}
+		s.IdleTimeout = duration
+	}
+
 	http.HandleFunc("/", health)
 	http.HandleFunc("/hello", debug(hello))
 	http.HandleFunc("/headers", debug(headers))
 	http.HandleFunc("/delay", debug(delay))
 	http.HandleFunc("/error", debug(httpError))
 
-	httpPort := os.Getenv("HTTP_PORT")
-	if httpPort == "" {
-		httpPort = "80"
-	}
 	fmt.Printf("Listen :%s\n", httpPort)
 
-	_ = http.ListenAndServe(":"+httpPort, nil)
+	log.Fatal(s.ListenAndServe())
 }
