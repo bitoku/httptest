@@ -162,6 +162,22 @@ func closeCon(server *http.Server) http.HandlerFunc {
 	}
 }
 
+func addHeaders(w http.ResponseWriter, req *http.Request) {
+	queries := req.URL.Query()
+
+	for key, values := range queries {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	for name, headers := range w.Header() {
+		for _, h := range headers {
+			_, _ = fmt.Fprintf(w, "%v: %v\n", name, h)
+		}
+	}
+}
+
 func main() {
 	conf := &settings{
 		addr:            addr(),
@@ -183,6 +199,7 @@ func main() {
 	http.HandleFunc("/delay", debug(delay))
 	http.HandleFunc("/error", debug(httpError))
 	http.HandleFunc("/close", debug(closeCon(server)))
+	http.HandleFunc("/addheaders", debug(addHeaders))
 
 	fmt.Println("Start Server")
 
