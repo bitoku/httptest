@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -178,6 +179,28 @@ func addHeaders(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+const rs2Letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = rs2Letters[rand.Intn(len(rs2Letters))]
+	}
+	return string(b)
+}
+
+func random(w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query().Get("byte")
+	size, err := strconv.Atoi(query)
+	if err != nil {
+		_, _ = fmt.Fprintf(w, "invalid code: %s\n", query)
+		return
+	}
+	str := RandString(size)
+	_, _ = fmt.Fprintf(w, "%v\n", str)
+	fmt.Println(str)
+}
+
 func main() {
 	conf := &settings{
 		addr:            addr(),
@@ -200,6 +223,7 @@ func main() {
 	http.HandleFunc("/error", debug(httpError))
 	http.HandleFunc("/close", debug(closeCon(server)))
 	http.HandleFunc("/addheaders", debug(addHeaders))
+	http.HandleFunc("/random", random)
 
 	fmt.Println("Start Server")
 
