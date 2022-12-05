@@ -91,8 +91,14 @@ func debug(endpoint func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
 	}
 }
 
-func health(w http.ResponseWriter, _ *http.Request) {
-	_, _ = fmt.Fprintf(w, "ok\n")
+func health(code string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		if code == "0" {
+			http.Error(w, "error", 500)
+			return
+		}
+		_, _ = fmt.Fprintf(w, "ok\n")
+	}
 }
 
 func hello(w http.ResponseWriter, _ *http.Request) {
@@ -215,7 +221,7 @@ func main() {
 
 	server.SetKeepAlivesEnabled(conf.enableKeepAlive)
 
-	http.HandleFunc("/", health)
+	http.HandleFunc("/", health(os.Getenv("HEALTH")))
 	http.HandleFunc("/info", info(conf))
 	http.HandleFunc("/hello", debug(hello))
 	http.HandleFunc("/headers", debug(headers))
